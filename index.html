@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, user-scalable=no">
+  <title>Document</title>
+  <style>
+    a {
+      width: 300px;
+      height: 30px;
+      display: inline-block;
+      border: 1px solid gray;
+      text-align: center;
+    }
+
+    #view {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      height: 100vh;
+      background: aqua;
+    }
+
+    .preview {
+      display: inline-block;
+      object-fit: cover;
+    }
+
+    .col {
+      flex: 300px;
+      max-width: 300px;
+      padding: 0 4px;
+    }
+
+    #content {
+      display: flex;
+      flex-wrap: wrap;
+      padding: 0 4px;
+    }
+  </style>
+</head>
+
+<body>
+  <div>
+    <div>
+      <input type="text" id="path" value="D:">
+      <button id="prev">
+        < </button>
+          <span id="pagetext">0</span>
+          <button id="next"> > </button>
+    </div>
+    <div id="content">
+    </div>
+  </div>
+  <img id="view" style="display:none" src="" alt="">
+
+  <script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui@4.0.31/dist/fancybox.umd.js"
+    referrerpolicy="no-referrer"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui@4.0.31/dist/fancybox.css"
+    referrerpolicy="no-referrer" />
+  <script>
+    Fancybox.bind("#view", {
+
+    })
+
+    const make = tag => (props, content) =>
+    {
+      const el = document.createElement(tag);
+      for (let [key, value] of Object.entries(props)) {
+        if (typeof value === "function") {
+          el.addEventListener(key, value);
+        } else {
+          el[key] = value;
+        }
+      }
+      if (content) {
+        el.innerHTML = content;
+      }
+
+      return el;
+    };
+    const a = make("a");
+    const span = make("span");
+    const div = make("div");
+    const img = make("img");
+
+    const path = document.getElementById('path');
+    const content = document.getElementById('content');
+    const view = document.getElementById('view');
+    const pageText = document.getElementById('pagetext');
+    const next = document.getElementById('next');
+    const prev = document.getElementById('prev');
+
+    const isImage = path => ['png', 'jpg', 'jpeg', 'webp', 'mp4'].includes(path.split('.').pop().toLowerCase());
+    const isVideo = path => ['mkv', 'mp4', 'webm'].includes(path.split('.').pop().toLowerCase());
+
+    const setPath = p => window.location.hash = `#path=${p}`;
+    const getPath = () => new URLSearchParams(window.location.hash.substr(1)).get("path");
+
+
+    const read = async (p) =>
+    {
+      setPath(p);
+      const { files } = await fetch('/share?path=' + p).then(_ => _.json());
+      content.innerHTML = '';
+      const cols = [0, 0, 0, 0, 0].map(() => div({
+        className: 'col'
+      }));
+
+
+      cols.forEach(col => content.appendChild(col));
+      const max = 10;
+      let page = 0;
+
+      const render = () =>
+      {
+        cols.forEach(col => col.innerHTML = '');
+        pageText.innerText = `${page + 1} of ${Math.ceil(files.length / max)} (${files.length})`;
+
+        files.slice(page * max, page * max + max).map(({ path }, i) =>
+        {
+
+          const { hostname } = document.location;
+          if (isImage(path)) {
+
+            return img({
+              className: "preview",
+              src: `http://${hostname}:1595${i % 2}/preview?w_max=300&path=${path}`,
+              click: () => viewImg(path),
+              error: e =>
+              {
+                e.target.src = `http://${hostname}:1595${i % 2}/read?path=${path}`
+                console.error(path)
+              }
+            })
+          }
+          if (isVideo(path)) {
+            return img({
+              className: "preview",
+              src: `http://${hostname}:1595${i % 2}/screen?w_max=300&path=${path}`,
+              click: () => viewImg(path)
+            })
+          }
+
+          return a({
+            href: `#path=${path}`,
+          }, path)
+        }).map((el, i) => cols[(i % cols.length)].appendChild(el));
+      }
+
+      next.onclick = () =>
+      {
+        page = Math.min(page + 1, files.length / max);
+        render();
+      }
+      prev.onclick = () =>
+      {
+        page = Math.max(page - 1, 0)
+        render();
+      }
+
+
+      render()
+    }
+
+    const viewImg = (img) =>
+    {
+      // view.src = `/read?path=${img}`;
+      // view.style.display = 'block';
+      // view.style.zoom = '';
+      const fancybox = Fancybox.show([
+        {
+          src: `/read?path=${img}`,
+          type: "image",
+        },
+      ]);
+    }
+
+    document.body.addEventListener('click', (e) =>
+    {
+      if (!e.target.classList.value.includes("preview")) {
+        view.style.display = 'none'
+      }
+    })
+
+    const load = () =>
+    {
+      view.style.display = 'none'
+      path.value = getPath();
+      read(path.value)
+    }
+
+    load();
+
+    window.addEventListener("hashchange", load);
+    path.addEventListener("change", e => setPath(e.target.value))
+    // window.addEventListener('wheel', (e) =>
+    // {
+    //   if (e.target.id === "view") {
+    //     e.preventDefault();
+
+    //     const zoom = e.target.style.zoom || 1;
+    //     const nextZoom = Math.max((-e.deltaY / 100 + Number(zoom)).toFixed(2), 1);
+    //     e.target.style.zoom = nextZoom;
+    //   }
+    // }, { passive: false })
+  </script>
+</body>
+
+</html>
